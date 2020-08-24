@@ -6,7 +6,6 @@ import (
 	. "go.minekube.com/common/minecraft/color"
 	. "go.minekube.com/common/minecraft/component"
 	"go.minekube.com/gate/pkg/proxy/permission"
-	"time"
 )
 
 var missingCommandPermission = &Text{
@@ -61,9 +60,9 @@ func (s *serverCmd) connect(ctx context.Context, c *Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(s.proxy.config.ConnectionTimeout))
-	defer cancel()
-	player.CreateConnectionRequest(rs).ConnectWithIndication(ctx)
+	//ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(s.proxy.config.ConnectionTimeout))
+	//defer cancel()
+	player.CreateConnectionRequest(rs).ConnectWithIndication(context.TODO())
 }
 
 // list registered servers

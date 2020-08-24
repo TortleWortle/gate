@@ -19,7 +19,6 @@ import (
 	"go.uber.org/zap"
 	"net"
 	"net/http"
-	"time"
 )
 
 type loginSessionHandler struct {
@@ -318,8 +317,6 @@ func (l *loginSessionHandler) connectToInitialServer(ctx context.Context, player
 		player.Disconnect(noAvailableServers) // Will call disconnected() in InitialConnectSessionHandler
 		return
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(l.config().ConnectionTimeout)*time.Millisecond)
-	defer cancel()
 	player.CreateConnectionRequest(chooseServer.InitialServer()).ConnectWithIndication(ctx)
 }
 
