@@ -34,7 +34,7 @@ const serverCmdPermission = "gate.command.server"
 
 type serverCmd struct{ proxy *Proxy }
 
-func (s *serverCmd) Invoke(c *Context) {
+func (s *serverCmd) Invoke(ctx context.Context, c *Context) {
 	if !hasCmdPerm(c.Source, serverCmdPermission) {
 		return
 	}
@@ -43,11 +43,11 @@ func (s *serverCmd) Invoke(c *Context) {
 		s.list(c)
 		return
 	}
-	s.connect(c)
+	s.connect(ctx, c)
 }
 
 // switch server
-func (s *serverCmd) connect(c *Context) {
+func (s *serverCmd) connect(ctx context.Context, c *Context) {
 	player, ok := c.Source.(Player)
 	if !ok {
 		_ = c.Source.SendMessage(&Text{Content: "Only players can connect to a server!", S: Style{Color: Red}})

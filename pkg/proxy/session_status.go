@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"go.minekube.com/gate/pkg/proto"
@@ -29,7 +30,7 @@ func newStatusSessionHandler(conn *minecraftConn, inbound Inbound) sessionHandle
 	return &statusSessionHandler{conn: conn, inbound: inbound}
 }
 
-func (h *statusSessionHandler) handlePacket(p proto.Packet) {
+func (h *statusSessionHandler) handlePacket(_ context.Context, p proto.Packet) {
 	switch typed := p.(type) {
 	case *packet.StatusRequest:
 		h.handleStatusRequest()

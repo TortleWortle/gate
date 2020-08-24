@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"go.minekube.com/gate/pkg/event"
@@ -49,7 +50,7 @@ func (b *backendTransitionSessionHandler) deactivated() {
 	}
 }
 
-func (b *backendTransitionSessionHandler) handlePacket(p proto.Packet) {
+func (b *backendTransitionSessionHandler) handlePacket(_ context.Context, p proto.Packet) {
 	if !b.shouldHandle() {
 		return
 	}

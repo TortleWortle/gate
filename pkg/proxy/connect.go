@@ -66,6 +66,7 @@ func (c *connect) listenAndServe(ctx context.Context, addr string) error {
 	}
 	defer ln.Close()
 
+	// close connection when context is done (without this it blocks forever)
 	go func() {
 		<-ctx.Done()
 		_ = ln.Close()
@@ -84,13 +85,13 @@ func (c *connect) listenAndServe(ctx context.Context, addr string) error {
 			}
 			return fmt.Errorf("error accepting new connection: %w", err)
 		}
-		go c.handleRawConn(conn)
+		go c.handleRawConn(ctx, conn)
 	}
 }
 
 // handleRawConn handles a just-accepted connection that
 // has not had any I/O performed on it yet.
-func (c *connect) handleRawConn(raw net.Conn) {
+func (c *connect) handleRawConn(ctx context.Context, raw net.Conn) {
 	if c.connectionsQuota != nil && c.connectionsQuota.Blocked(raw.RemoteAddr()) {
 		_ = raw.Close()
 		zap.L().Info("A connection was exceeded the rate limit", zap.Stringer("remoteAddr", raw.RemoteAddr()))
@@ -103,7 +104,7 @@ func (c *connect) handleRawConn(raw net.Conn) {
 	})
 	conn.setSessionHandler0(newHandshakeSessionHandler(conn))
 	// Read packets in loop
-	conn.readLoop()
+	conn.readLoop(ctx)
 }
 
 // PlayerCount returns the number of players on the proxy.

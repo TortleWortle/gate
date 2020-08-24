@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"go.minekube.com/common/minecraft/color"
 	"go.minekube.com/common/minecraft/component"
@@ -27,7 +28,7 @@ func newHandshakeSessionHandler(conn *minecraftConn) sessionHandler {
 	return &handshakeSessionHandler{conn: conn}
 }
 
-func (h *handshakeSessionHandler) handlePacket(p proto.Packet) {
+func (h *handshakeSessionHandler) handlePacket(_ context.Context, p proto.Packet) {
 	switch typed := p.(type) {
 	// TODO legacy pings
 	case *packet.Handshake:
@@ -158,8 +159,8 @@ func newInitialInbound(c *minecraftConn, virtualHost net.Addr) Inbound {
 	}
 }
 
-func (i *initialInbound) Closed() <-chan struct{} {
-	return i.minecraftConn.closed
+func (i *initialInbound) Closed() bool {
+	return i.minecraftConn.closed.Load()
 }
 
 func (i *initialInbound) VirtualHost() net.Addr {
@@ -187,8 +188,8 @@ type noOpSessionHandler struct{}
 
 var _ sessionHandler = (*noOpSessionHandler)(nil)
 
-func (noOpSessionHandler) handlePacket(proto.Packet)                {}
-func (noOpSessionHandler) handleUnknownPacket(*proto.PacketContext) {}
-func (noOpSessionHandler) disconnected()                            {}
-func (noOpSessionHandler) deactivated()                             {}
-func (noOpSessionHandler) activated()                               {}
+func (noOpSessionHandler) handlePacket(context.Context, proto.Packet) {}
+func (noOpSessionHandler) handleUnknownPacket(*proto.PacketContext)   {}
+func (noOpSessionHandler) disconnected()                              {}
+func (noOpSessionHandler) deactivated()                               {}
+func (noOpSessionHandler) activated()                                 {}

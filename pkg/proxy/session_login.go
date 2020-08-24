@@ -37,18 +37,18 @@ func newLoginSessionHandler(conn *minecraftConn, inbound Inbound) sessionHandler
 	return &loginSessionHandler{conn: conn, inbound: inbound}
 }
 
-func (l *loginSessionHandler) handlePacket(p proto.Packet) {
+func (l *loginSessionHandler) handlePacket(ctx context.Context, p proto.Packet) {
 	switch t := p.(type) {
 	case *packet.ServerLogin:
-		l.handleServerLogin(t)
+		l.handleServerLogin(ctx, t)
 	case *packet.EncryptionResponse:
-		l.handleEncryptionResponse(t)
+		l.handleEncryptionResponse(ctx, t)
 	default:
 		l.conn.close() // unknown packet, close connection
 	}
 }
 
-func (l *loginSessionHandler) handleServerLogin(login *packet.ServerLogin) {
+func (l *loginSessionHandler) handleServerLogin(ctx context.Context, login *packet.ServerLogin) {
 	l.login = login
 
 	e := newPreLoginEvent(l.inbound, l.login.Username)
@@ -74,7 +74,7 @@ func (l *loginSessionHandler) handleServerLogin(login *packet.ServerLogin) {
 		return
 	}
 	// Offline mode login
-	l.initPlayer(profile.NewOffline(l.login.Username), false)
+	l.initPlayer(ctx, profile.NewOffline(l.login.Username), false)
 }
 
 func (l *loginSessionHandler) generateEncryptionRequest() *packet.EncryptionRequest {
@@ -91,7 +91,7 @@ var unableAuthWithMojang = &component.Text{
 	S:       component.Style{Color: color.Red},
 }
 
-func (l *loginSessionHandler) handleEncryptionResponse(resp *packet.EncryptionResponse) {
+func (l *loginSessionHandler) handleEncryptionResponse(ctx context.Context, resp *packet.EncryptionResponse) {
 	if l.login == nil || // No ServerLogin packet received yet
 		len(l.verify) == 0 { // No EncryptionRequest packet sent yet
 		_ = l.conn.close()
@@ -163,7 +163,7 @@ func (l *loginSessionHandler) handleEncryptionResponse(resp *packet.EncryptionRe
 			}
 			return
 		}
-		l.initPlayer(gameProfile, true)
+		l.initPlayer(ctx, gameProfile, true)
 	case http.StatusNoContent:
 		// Apparently an offline-mode user logged onto this online-mode proxy.
 		_ = l.conn.closeWith(packet.DisconnectWith(onlineModeOnly))
@@ -213,7 +213,7 @@ var (
 	}
 )
 
-func (l *loginSessionHandler) initPlayer(profile *profile.GameProfile, onlineMode bool) {
+func (l *loginSessionHandler) initPlayer(ctx context.Context, profile *profile.GameProfile, onlineMode bool) {
 	// Some connection types may need to alter the game profile.
 	profile = l.conn.Type().addGameProfileTokensIfRequired(profile,
 		l.conn.proxy.Config().Forwarding.Mode)
@@ -244,11 +244,11 @@ func (l *loginSessionHandler) initPlayer(profile *profile.GameProfile, onlineMod
 	player.permFunc = permSetup.Func()
 
 	if player.Active() {
-		l.completeLoginProtocolPhaseAndInit(player)
+		l.completeLoginProtocolPhaseAndInit(ctx, player)
 	}
 }
 
-func (l *loginSessionHandler) completeLoginProtocolPhaseAndInit(player *connectedPlayer) {
+func (l *loginSessionHandler) completeLoginProtocolPhaseAndInit(ctx context.Context, player *connectedPlayer) {
 	cfg := l.config()
 
 	// Send compression threshold
@@ -304,10 +304,10 @@ func (l *loginSessionHandler) completeLoginProtocolPhaseAndInit(player *connecte
 	// let InitialConnectSessionHandler do further work.
 	player.setSessionHandler(newInitialConnectSessionHandler(player))
 	l.event().Fire(&PostLoginEvent{player: player})
-	l.connectToInitialServer(player)
+	l.connectToInitialServer(ctx, player)
 }
 
-func (l *loginSessionHandler) connectToInitialServer(player *connectedPlayer) {
+func (l *loginSessionHandler) connectToInitialServer(ctx context.Context, player *connectedPlayer) {
 	initialFromConfig := player.nextServerToTry(nil)
 	chooseServer := &PlayerChooseInitialServerEvent{
 		player:        player,
@@ -318,7 +318,7 @@ func (l *loginSessionHandler) connectToInitialServer(player *connectedPlayer) {
 		player.Disconnect(noAvailableServers) // Will call disconnected() in InitialConnectSessionHandler
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(l.config().ConnectionTimeout)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(l.config().ConnectionTimeout)*time.Millisecond)
 	defer cancel()
 	player.CreateConnectionRequest(chooseServer.InitialServer()).ConnectWithIndication(ctx)
 }

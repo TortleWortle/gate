@@ -345,7 +345,7 @@ func (s *serverConnection) connect(ctx context.Context) (result *connectionResul
 	if err != nil {
 		return nil, fmt.Errorf("error writing ServerLogin packet to server connection: %w", err)
 	}
-	go serverMc.readLoop()
+	go serverMc.readLoop(ctx)
 
 	// Block
 	r := <-resultChan

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"go.minekube.com/gate/pkg/config"
 	"go.minekube.com/gate/pkg/proto"
@@ -24,7 +25,7 @@ import (
 // Since connections transition between states packets need to be handled differently,
 // this behaviour is divided between sessions by sessionHandlers.
 type sessionHandler interface {
-	handlePacket(p proto.Packet)                // Called to handle incoming packets on the connection.
+	handlePacket(ctx context.Context, p proto.Packet)                // Called to handle incoming packets on the connection.
 	handleUnknownPacket(p *proto.PacketContext) // Called to handle incoming unknown packet.
 	disconnected()                              // Called when connection is closing, to teardown the session.
 
@@ -45,9 +46,11 @@ type minecraftConn struct {
 	writeBuf *bufio.Writer
 	encoder  *codec.Encoder
 
-	closed          chan struct{} // indicates connection is closed
-	closeOnce       sync.Once     // Makes sure the connection is closed once, while blocking proceeding calls.
-	knownDisconnect atomic.Bool   // Silences disconnect (any error is known)
+	//closed          chan struct{} // indicates connection is closed
+	cancelFunc      context.CancelFunc
+	closeOnce       sync.Once // Makes sure the connection is closed once, while blocking proceeding calls.
+	closed          atomic.Bool
+	knownDisconnect atomic.Bool // Silences disconnect (any error is known)
 
 	protocol proto.Protocol // Client's protocol version.
 
@@ -75,9 +78,9 @@ func newMinecraftConn(base net.Conn, proxy *Proxy, playerConn bool, connDetails 
 		})
 	}()
 	return &minecraftConn{
-		proxy:    proxy,
-		c:        base,
-		closed:   make(chan struct{}),
+		proxy: proxy,
+		c:     base,
+		//closed:   make(chan struct{}),
 		writeBuf: bufio.NewWriter(base),
 		readBuf:  bufio.NewReader(base),
 		state:    state.Handshake,
@@ -92,44 +95,55 @@ func (c *minecraftConn) nextPacket() (p *proto.PacketContext, err error) {
 	return
 }
 
+func loop(ctx context.Context, c *minecraftConn) bool {
+	defer func() { // Catch any panics
+		if r := recover(); r != nil {
+			zap.S().Errorf("Recovered from panic in read packets loop: %v", r)
+		}
+	}()
+
+	// Set read timeout to wait for client to send a packet
+	deadline := time.Now().Add(time.Duration(c.config().ReadTimeout) * time.Millisecond)
+	_ = c.c.SetReadDeadline(deadline)
+
+	// Read next packet.
+	packetCtx, err := c.nextPacket()
+	if err != nil && !errors.Is(err, codec.ErrDecoderLeftBytes) { // Ignore this error.
+		zap.L().Debug("Error reading packet", zap.Error(err))
+		if handleReadErr(err) {
+			// Sleep briefly and try again
+			time.Sleep(time.Millisecond * 5)
+			return true
+		}
+		return false
+	}
+	if !packetCtx.KnownPacket {
+		c.SessionHandler().handleUnknownPacket(packetCtx)
+		return true
+	}
+
+	// Handle packet by connections session handler.
+	c.SessionHandler().handlePacket(ctx, packetCtx.Packet)
+	return true
+}
+
 // readLoop is the main goroutine of this connection and
 // reads packets to pass them further to the current sessionHandler.
 // close will be called on method return.
-func (c *minecraftConn) readLoop() {
+func (c *minecraftConn) readLoop(ctx context.Context) {
+	ctx, cancelFunc := context.WithCancel(ctx)
+	c.cancelFunc = cancelFunc
 	// Make sure to close connection on return, if not already
 	defer func() { _ = c.closeKnown(false) }()
-
-	for !c.Closed() && func() bool {
-		defer func() { // Catch any panics
-			if r := recover(); r != nil {
-				zap.S().Errorf("Recovered from panic in read packets loop: %v", r)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if !loop(ctx, c) {
+				break
 			}
-		}()
-
-		// Set read timeout to wait for client to send a packet
-		deadline := time.Now().Add(time.Duration(c.config().ReadTimeout) * time.Millisecond)
-		_ = c.c.SetReadDeadline(deadline)
-
-		// Read next packet.
-		packetCtx, err := c.nextPacket()
-		if err != nil && !errors.Is(err, codec.ErrDecoderLeftBytes) { // Ignore this error.
-			zap.L().Debug("Error reading packet", zap.Error(err))
-			if handleReadErr(err) {
-				// Sleep briefly and try again
-				time.Sleep(time.Millisecond * 5)
-				return true
-			}
-			return false
 		}
-		if !packetCtx.KnownPacket {
-			c.SessionHandler().handleUnknownPacket(packetCtx)
-			return true
-		}
-
-		// Handle packet by connections session handler.
-		c.SessionHandler().handlePacket(packetCtx.Packet)
-		return true
-	}() {
 	}
 }
 
@@ -270,7 +284,8 @@ func (c *minecraftConn) closeKnown(markKnown bool) (err error) {
 			c.knownDisconnect.Store(true)
 		}
 
-		close(c.closed)
+		c.cancelFunc()
+		c.closed.Store(true)
 		err = c.c.Close()
 
 		if sh := c.SessionHandler(); sh != nil {
@@ -322,12 +337,7 @@ func (c *minecraftConn) closeWith(packet proto.Packet) (err error) {
 
 // Closed returns true if the connection is closed.
 func (c *minecraftConn) Closed() bool {
-	select {
-	case <-c.closed:
-		return true
-	default:
-		return false
-	}
+	return c.closed.Load()
 }
 
 func (c *minecraftConn) RemoteAddr() net.Addr {
@@ -435,5 +445,5 @@ type Inbound interface {
 	Active() bool             // Whether or not connection remains active.
 	// Closed returns a receive only channel that can be used know when the connection was closed.
 	// (e.g. for canceling work in an event subscriber)
-	Closed() <-chan struct{}
+	Closed() bool
 }

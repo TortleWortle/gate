@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
@@ -62,7 +63,7 @@ func (b *backendLoginSessionHandler) deactivated() {
 	}
 }
 
-func (b *backendLoginSessionHandler) handlePacket(p proto.Packet) {
+func (b *backendLoginSessionHandler) handlePacket(_ context.Context, p proto.Packet) {
 	switch t := p.(type) {
 	case *packet.LoginPluginMessage:
 		b.handleLoginPluginMessage(t)

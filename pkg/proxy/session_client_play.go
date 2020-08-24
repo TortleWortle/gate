@@ -30,12 +30,12 @@ func newClientPlaySessionHandler(player *connectedPlayer) *clientPlaySessionHand
 	return &clientPlaySessionHandler{player: player}
 }
 
-func (c *clientPlaySessionHandler) handlePacket(pack proto.Packet) {
+func (c *clientPlaySessionHandler) handlePacket(ctx context.Context, pack proto.Packet) {
 	switch p := pack.(type) {
 	case *packet.KeepAlive:
 		c.handleKeepAlive(p)
 	case *packet.Chat:
-		c.handleChat(p)
+		c.handleChat(ctx, p)
 	case *plugin.Message:
 		c.handlePluginMessage(p)
 	case *packet.ClientSettings:
@@ -308,7 +308,7 @@ func (c *clientPlaySessionHandler) proxy() *Proxy {
 	return c.player.proxy
 }
 
-func (c *clientPlaySessionHandler) handleChat(p *packet.Chat) {
+func (c *clientPlaySessionHandler) handleChat(ctx context.Context, p *packet.Chat) {
 	serverConn := c.player.connectedServer()
 	if serverConn == nil {
 		return
@@ -334,12 +334,12 @@ func (c *clientPlaySessionHandler) handleChat(p *packet.Chat) {
 		cmd, args, _ := extract(commandline)
 		if c.proxy().command.Has(cmd) {
 			// Make invoke context
-			ctx, cancel := c.player.newContext(context.Background())
+			//ctx, cancel := c.player.newContext(context.Background())
+			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			// Invoke registered command
 			zap.S().Infof("%s executing command /%s", c.player, commandline)
-			_, err := c.proxy().command.Invoke(&Context{
-				Context: ctx,
+			_, err := c.proxy().command.Invoke(ctx, &Context{
 				Source:  c.player,
 				Args:    args,
 			}, cmd)

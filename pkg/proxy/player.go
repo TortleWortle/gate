@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -466,8 +465,8 @@ func (p *connectedPlayer) setSettings(settings *packet.ClientSettings) {
 	})
 }
 
-func (p *connectedPlayer) Closed() <-chan struct{} {
-	return p.minecraftConn.closed
+func (p *connectedPlayer) Closed() bool {
+	return p.minecraftConn.Closed()
 }
 
 // Settings returns the players client settings.
@@ -484,17 +483,18 @@ func (p *connectedPlayer) Settings() player.Settings {
 // returns a new player context that is canceled when:
 //  - player disconnects
 //  - parent was canceled
-func (p *connectedPlayer) newContext(parent context.Context) (ctx context.Context, cancel func()) {
-	ctx, cancel = context.WithCancel(parent)
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-p.closed:
-			cancel()
-		}
-	}()
-	return ctx, cancel
-}
+
+//func (p *connectedPlayer) newContext(parent context.Context) (ctx context.Context, cancel func()) {
+//	ctx, cancel = context.WithCancel(parent)
+//	go func() {
+//		select {
+//		case <-ctx.Done():
+//		case <-p.closed:
+//			cancel()
+//		}
+//	}()
+//	return ctx, cancel
+//}
 
 func randomUint64() uint64 {
 	buf := make([]byte, 8)

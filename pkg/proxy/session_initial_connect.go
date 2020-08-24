@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"go.minekube.com/gate/pkg/proto"
 	"go.minekube.com/gate/pkg/proto/packet/plugin"
 )
@@ -15,7 +16,7 @@ func newInitialConnectSessionHandler(player *connectedPlayer) sessionHandler {
 	return &initialConnectSessionHandler{player: player}
 }
 
-func (i *initialConnectSessionHandler) handlePacket(p proto.Packet) {
+func (i *initialConnectSessionHandler) handlePacket(_ context.Context, p proto.Packet) {
 	switch typed := p.(type) {
 	case *plugin.Message:
 		i.handlePluginMessage(typed)

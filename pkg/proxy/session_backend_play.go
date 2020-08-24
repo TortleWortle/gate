@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"go.minekube.com/common/minecraft/key"
 	"go.minekube.com/gate/pkg/config"
@@ -33,7 +34,7 @@ func newBackendPlaySessionHandler(serverConn *serverConnection) (sessionHandler,
 	}, nil
 }
 
-func (b *backendPlaySessionHandler) handlePacket(pack proto.Packet) {
+func (b *backendPlaySessionHandler) handlePacket(_ context.Context, pack proto.Packet) {
 	if !b.shouldHandle() {
 		return
 	}

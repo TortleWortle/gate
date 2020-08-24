@@ -63,7 +63,7 @@ func (m *CommandManager) Has(command string) bool {
 }
 
 // Invoke invokes a registered command.
-func (m *CommandManager) Invoke(ctx *Context, command string) (found bool, err error) {
+func (m *CommandManager) Invoke(actx context.Context, ctx *Context, command string) (found bool, err error) {
 	if len(command) == 0 {
 		return false, errors.New("command must not be empty")
 	}
@@ -87,13 +87,13 @@ func (m *CommandManager) Invoke(ctx *Context, command string) (found bool, err e
 			err = fmt.Errorf("panic while invoking command: %v", r)
 		}
 	}()
-	r.cmd.Invoke(ctx)
+	r.cmd.Invoke(actx, ctx)
 	return true, err
 }
 
 // Command is an invokable command.
 type Command interface {
-	Invoke(*Context)
+	Invoke(context.Context, *Context)
 }
 
 // Func is a shorthand type that implements the Command interface.
