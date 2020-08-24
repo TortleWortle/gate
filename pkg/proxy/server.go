@@ -279,7 +279,7 @@ func (s *serverConnection) connect(ctx context.Context) (result *connectionResul
 	// Connect proxy -> server
 	zap.L().Debug("Proxy connecting to backend server...", zap.String("addr", addr))
 	var d net.Dialer
-	d.Timeout = time.Millisecond*time.Duration(s.config().ConnectionTimeout)
+	d.Timeout = time.Millisecond * time.Duration(s.config().ConnectionTimeout)
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to server %s: %w", addr, err)

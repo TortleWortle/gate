@@ -47,7 +47,6 @@ type minecraftConn struct {
 	encoder  *codec.Encoder
 
 	//closed          chan struct{} // indicates connection is closed
-	cancelFunc      context.CancelFunc
 	closeOnce       sync.Once // Makes sure the connection is closed once, while blocking proceeding calls.
 	closed          atomic.Bool
 	knownDisconnect atomic.Bool // Silences disconnect (any error is known)
@@ -132,16 +131,16 @@ func loop(ctx context.Context, c *minecraftConn) bool {
 // close will be called on method return.
 func (c *minecraftConn) readLoop(ctx context.Context) {
 	ctx, cancelFunc := context.WithCancel(ctx)
-	c.cancelFunc = cancelFunc
 	// Make sure to close connection on return, if not already
 	defer func() { _ = c.closeKnown(false) }()
+	defer cancelFunc()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			if !loop(ctx, c) {
-				break
+				return
 			}
 		}
 	}
@@ -279,12 +278,11 @@ var ErrClosedConn = errors.New("connection is closed")
 func (c *minecraftConn) closeKnown(markKnown bool) (err error) {
 	alreadyClosed := true
 	c.closeOnce.Do(func() {
-		alreadyClosed = false
 		if markKnown {
 			c.knownDisconnect.Store(true)
 		}
-
-		c.cancelFunc()
+		
+		alreadyClosed = false
 		c.closed.Store(true)
 		err = c.c.Close()
 
@@ -295,7 +293,6 @@ func (c *minecraftConn) closeKnown(markKnown bool) (err error) {
 				zap.S().Infof("%s has disconnected", p.player_())
 			}
 		}
-
 	})
 	if alreadyClosed {
 		err = ErrClosedConn
